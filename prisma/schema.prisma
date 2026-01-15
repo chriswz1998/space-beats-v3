@@ -1,0 +1,202 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                   String                @id
+  name                 String
+  email                String
+  emailVerified        Boolean               @default(false)
+  image                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  sessions             Session[]
+  accounts             Account[]
+  userSongAchievements UserSongAchievement[]
+  userAchievements     UserAchievement[]
+  songs                Song[]
+  roomsInvited         Room[]               @relation("RoomInviter")
+  roomsReceived        Room[]               @relation("RoomInvitee")
+  roomPlayers          RoomPlayer[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Song {
+  id          String @id @default(cuid())
+  name        String
+  duration    Int
+  author      String
+  url         String
+  easyChart   Json
+  normalChart Json
+  hardChart   Json
+  achievement String
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt            DateTime              @default(now())
+  userSongAchievements UserSongAchievement[]
+  rooms                Room[]
+
+  @@index([userId])
+}
+
+model UserSongAchievement {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  songId String
+  song   Song   @relation(fields: [songId], references: [id])
+
+  // Highest score for this song
+  highScore Int @default(0)
+
+  // Core achievement flags (boolean for simplicity)
+  isCleared    Boolean @default(false) // Cleared
+  isFullCombo  Boolean @default(false) // Full combo
+  isAllPerfect Boolean @default(false) // All perfect
+
+  updatedAt DateTime @updatedAt
+
+  // Composite unique index: one progress record per user per song
+  @@unique([userId, songId])
+}
+
+enum AchievementType {
+  FIRST_EXPERIENCE // Complete the first song
+  PERFECT_MASTER // All perfect on a single song
+  HIGH_SCORE_CHALLENGER // Score over 100,000 on a single song
+  RHYTHM_EXPERT // Accuracy above 90%
+  COMPLETIONIST // Complete all songs
+}
+
+enum RoomStatus {
+  PENDING
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum GameResultStatus {
+  VICTORY
+  GAMEOVER
+}
+
+model UserAchievement {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  type       AchievementType // Achievement type
+  unlockedAt DateTime        @default(now()) // Unlock time
+
+  // Composite unique index: one instance per user per achievement
+  @@unique([userId, type])
+}
+
+model Room {
+  id           String     @id @default(cuid())
+  songId       String
+  song         Song       @relation(fields: [songId], references: [id])
+  difficulty   String
+  status       RoomStatus @default(PENDING)
+  inviterId    String
+  inviter      User       @relation("RoomInviter", fields: [inviterId], references: [id])
+  inviteeId    String?
+  invitee      User?      @relation("RoomInvitee", fields: [inviteeId], references: [id])
+  inviteeEmail String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  players RoomPlayer[]
+
+  @@index([inviterId])
+  @@index([inviteeId])
+  @@index([songId])
+}
+
+model RoomPlayer {
+  id           String           @id @default(cuid())
+  roomId       String
+  room         Room             @relation(fields: [roomId], references: [id])
+  userId       String
+  user         User             @relation(fields: [userId], references: [id])
+  score        Int              @default(0)
+  perfectCount Int              @default(0)
+  goodCount    Int              @default(0)
+  missCount    Int              @default(0)
+  accuracy     Float            @default(0)
+  result       GameResultStatus?
+  finishedAt   DateTime?
+  resultViewedAt DateTime?    // When this user viewed the result
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([roomId, userId])
+  @@index([userId])
+}

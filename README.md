@@ -1,5 +1,27 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Local Setup and Run
+
+### Requirements
+- Node.js 18+ (LTS recommended)
+- npm (or yarn/pnpm/bun)
+- If using the database: configure your connection (e.g. `DATABASE_URL`)
+
+### Steps
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Start the dev server:
+   ```bash
+   npm run dev
+   ```
+3. Open: `http://localhost:3000`
+
+## Test Songs
+
+I included three songs in the compressed package. After the project runs, you can use these songs for testing. **Cadecia** is recommended because its file size is smaller, so the wait time is shorter.
+
 ## Getting Started
 
 First, run the development server:

@@ -267,6 +267,10 @@ export function createGameSceneClass(Phaser: any): any {
      */
     private handleGameOver(): void {
       this.isPlaying = false
+      if (this.musicSound && this.musicSound.isPlaying) {
+        this.musicSound.pause()
+        console.log('[GameScene] Music paused (game over)')
+      }
       const stats = this.gameLogic.getStats()
       if (this.onGameOverCallback) {
         this.onGameOverCallback(stats)

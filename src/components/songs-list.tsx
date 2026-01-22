@@ -1,22 +1,14 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { AchievementSong } from '@/components/achievement-song'
 import { IconMusic, IconPlayerPlay } from '@tabler/icons-react'
 import type { Song } from '@/generated/prisma/client' // Prefer type-only import
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { Invite } from '@/components/invite'
 
 // Use Song[] for the list props.
 interface SongsListProps {
@@ -27,14 +19,7 @@ export const SongsList = ({ songs }: SongsListProps) => {
   const router = useRouter()
   const [model, setModel] = useState<string>('')
   const [isMe, setIsMe] = useState<number | undefined>()
-  const [inviteOpen, setInviteOpen] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteSongId, setInviteSongId] = useState<string | null>(null)
-  const [inviteSongName, setInviteSongName] = useState<string | null>(null)
-  const [inviteDifficulty, setInviteDifficulty] = useState<string>('normal')
-  const [inviting, setInviting] = useState(false)
 
-  // Handle empty state (optional).
   if (!songs || songs.length === 0) {
     return (
       <div className="text-center py-10 border-4 border-black border-dashed rounded-2xl bg-gray-100">
@@ -160,78 +145,15 @@ export const SongsList = ({ songs }: SongsListProps) => {
                 <IconPlayerPlay className="w-5 h-5 fill-black mr-2" />
                 PLAY
               </Button>
-
-              <Button
-                variant={'pop'}
-                onClick={() => {
-                  if (!model || isMe !== index) {
-                    toast.message('please select a model')
-                    return
-                  }
-                  setInviteSongId(song.id)
-                  setInviteSongName(song.name)
-                  setInviteDifficulty(model)
-                  setInviteEmail('')
-                  setInviteOpen(true)
-                }}
-              >
-                Invite
-              </Button>
+              <Invite
+                songId={song.id}
+                difficulty={model}
+                songName={song.name}
+              />
             </div>
           </div>
         ))}
       </div>
-
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Invite a Player</DialogTitle>
-            <DialogDescription>
-              {inviteSongName} · {inviteDifficulty.toUpperCase()}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              placeholder="Enter opponent email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-            />
-            <Button
-              variant="pop"
-              disabled={inviting || !inviteEmail || !inviteSongId}
-              onClick={async () => {
-                if (!inviteSongId) return
-                try {
-                  setInviting(true)
-                  const res = await fetch('/api/room/invite', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      songId: inviteSongId,
-                      difficulty: inviteDifficulty,
-                      inviteeEmail: inviteEmail
-                    })
-                  })
-                  const data = await res.json()
-                  if (!data?.success) {
-                    toast.error(data?.error || 'Invite failed')
-                    return
-                  }
-                  toast.success('Invitation sent!')
-                  setInviteOpen(false)
-                } catch (error) {
-                  console.error('Invite failed:', error)
-                  toast.error('Invite failed')
-                } finally {
-                  setInviting(false)
-                }
-              }}
-            >
-              Send Invite
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

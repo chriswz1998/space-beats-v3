@@ -26,8 +26,8 @@ model User {
   userSongAchievements UserSongAchievement[]
   userAchievements     UserAchievement[]
   songs                Song[]
-  roomsInvited         Room[]               @relation("RoomInviter")
-  roomsReceived        Room[]               @relation("RoomInvitee")
+  roomsInvited         Room[]                @relation("RoomInviter")
+  roomsReceived        Room[]                @relation("RoomInvitee")
   roomPlayers          RoomPlayer[]
 
   @@unique([email])
@@ -133,14 +133,6 @@ enum AchievementType {
   COMPLETIONIST // Complete all songs
 }
 
-enum RoomStatus {
-  PENDING
-  ACCEPTED
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
 enum GameResultStatus {
   VICTORY
   GAMEOVER
@@ -159,44 +151,79 @@ model UserAchievement {
   @@unique([userId, type])
 }
 
-model Room {
-  id           String     @id @default(cuid())
-  songId       String
-  song         Song       @relation(fields: [songId], references: [id])
-  difficulty   String
-  status       RoomStatus @default(PENDING)
-  inviterId    String
-  inviter      User       @relation("RoomInviter", fields: [inviterId], references: [id])
-  inviteeId    String?
-  invitee      User?      @relation("RoomInvitee", fields: [inviteeId], references: [id])
-  inviteeEmail String
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+enum RoomStatus {
+  PENDING_ACCEPT // 等待被邀请人接受
+  READY // 已接受，准备就绪 (只有这个状态或PLAYING状态下，前端按钮才可点击进入)
+  PLAYING // 游戏中
+  COMPLETED // 游戏结束 (双方都已完成)
+  REJECTED // 被邀请人拒绝
+  EXPIRED // 邀请过期
+}
 
+model Room {
+  id     String     @id @default(cuid())
+  songId String
+  song   Song       @relation(fields: [songId], references: [id])
+  status RoomStatus @default(PENDING_ACCEPT)
+
+  // 邀请人信息
+  inviterId String
+  inviter   User   @relation("RoomInviter", fields: [inviterId], references: [id])
+
+  // 被邀请人信息 (可能还没注册，所以保留email，但如果接受了必须关联User)
+  inviteeEmail String
+  inviteeId    String?
+  invitee      User?   @relation("RoomInvitee", fields: [inviteeId], references: [id])
+
+  // 难度选择
+  difficulty String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联两个玩家的具体战绩记录
   players RoomPlayer[]
 
   @@index([inviterId])
   @@index([inviteeId])
   @@index([songId])
+  @@map("room")
 }
 
 model RoomPlayer {
-  id           String           @id @default(cuid())
-  roomId       String
-  room         Room             @relation(fields: [roomId], references: [id])
-  userId       String
-  user         User             @relation(fields: [userId], references: [id])
-  score        Int              @default(0)
-  perfectCount Int              @default(0)
-  goodCount    Int              @default(0)
-  missCount    Int              @default(0)
-  accuracy     Float            @default(0)
-  result       GameResultStatus?
-  finishedAt   DateTime?
-  resultViewedAt DateTime?    // When this user viewed the result
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id     String @id @default(cuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
-  @@unique([roomId, userId])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  // --- 游戏结果数据 ---
+  score        Int   @default(0)
+  perfectCount Int   @default(0)
+  goodCount    Int   @default(0)
+  missCount    Int   @default(0)
+  accuracy     Float @default(0)
+  maxCombo     Int   @default(0) // 建议加上连击数
+
+  // --- 状态控制 ---
+
+  // 是否已完赛：前端上传分数时设为 true
+  // 后端逻辑：当Room中两个Player的 hasFinished 都为 true 时，将 Room.status 改为 COMPLETED
+  hasFinished Boolean @default(false)
+
+  // 是否已查看结果：用于控制“消息删除/消失”
+  // 逻辑：首页轮询到 Room COMPLETED -> 弹窗 -> 用户点击关闭/确认 -> 设置 hasViewedResult = true
+  // 前端查询消息列表时，过滤掉 hasViewedResult = true 的记录
+  hasViewedResult Boolean @default(false)
+
+  result     GameResultStatus? // VICTORY / GAMEOVER (可选，或者通过比较分数动态计算)
+  finishedAt DateTime? // 完赛时间
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([roomId, userId]) // 确保一个用户在一个房间只有一条记录
   @@index([userId])
+  @@map("room_player")
 }

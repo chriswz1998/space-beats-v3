@@ -13,7 +13,6 @@ export default function PlayPage({
   params: Promise<{ playId: string; difficulty: string }>
 }) {
   const { playId, difficulty } = use(params)
-  console.log(difficulty)
   const [songData, setSongData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()

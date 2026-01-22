@@ -1,106 +1,68 @@
+// app/api/room/submit/route.ts
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
+import { RoomStatus } from '@/generated/prisma/enums'
 
 export async function POST(req: Request) {
+  // 1. 只有登录用户才能提交
+  const session = await auth.api.getSession({
+    headers: await headers()
+  })
+
+  if (!session || !session.user) {
+    return new NextResponse('Unauthorized', { status: 401 })
+  }
+
   try {
     const body = await req.json()
-    const {
-      roomId,
-      score,
-      perfectCount,
-      goodCount,
-      missCount,
-      accuracy,
-      result
-    } = body || {}
+    const { roomId, score, perfect, good, miss, maxCombo } = body
 
-    if (!roomId || typeof score !== 'number') {
-      return NextResponse.json(
-        { error: 'Missing roomId or score' },
-        { status: 400 }
-      )
+    // 如果没有 roomId，说明是单人练习模式，不记录对战成绩
+    if (!roomId) {
+      return NextResponse.json({ message: 'Practice score saved locally' })
     }
 
-    const session = await auth.api.getSession({
-      headers: await headers()
-    })
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const room = await prisma.room.findUnique({
-      where: { id: String(roomId) }
-    })
-
-    if (!room) {
-      return NextResponse.json({ error: 'Room not found' }, { status: 404 })
-    }
-
-    if (room.inviterId !== session.user.id && room.inviteeId !== session.user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    await prisma.roomPlayer.upsert({
+    // 2. 核心逻辑：更新“这个房间”里“当前用户”的那条记录
+    // 我们不需要前端传 userId，直接用 session.user.id 安全地查找
+    const updatedPlayer = await prisma.roomPlayer.update({
       where: {
         roomId_userId: {
-          roomId: room.id,
+          // 复合唯一键
+          roomId: roomId,
           userId: session.user.id
         }
       },
-      update: {
+      data: {
         score,
-        perfectCount: perfectCount ?? 0,
-        goodCount: goodCount ?? 0,
-        missCount: missCount ?? 0,
-        accuracy: typeof accuracy === 'number' ? accuracy : 0,
-        result: result || null,
-        finishedAt: new Date()
-      },
-      create: {
-        roomId: room.id,
-        userId: session.user.id,
-        score,
-        perfectCount: perfectCount ?? 0,
-        goodCount: goodCount ?? 0,
-        missCount: missCount ?? 0,
-        accuracy: typeof accuracy === 'number' ? accuracy : 0,
-        result: result || null,
+        perfectCount: perfect,
+        goodCount: good,
+        missCount: miss,
+        maxCombo: maxCombo,
+        hasFinished: true, // 标记为已完成
         finishedAt: new Date()
       }
     })
 
-    const finishedCount = await prisma.roomPlayer.count({
-      where: {
-        roomId: room.id,
-        finishedAt: { not: null }
-      }
+    // 3. 检查是否双方都完成了？
+    // 如果都完成了，把房间状态改成 COMPLETED
+    const roomPlayers = await prisma.roomPlayer.findMany({
+      where: { roomId }
     })
 
-    if (finishedCount >= 2) {
+    const allFinished = roomPlayers.every((p) => p.hasFinished)
+
+    if (allFinished) {
       await prisma.room.update({
-        where: { id: room.id },
-        data: {
-          status: 'COMPLETED'
-        }
-      })
-    } else if (room.status === 'ACCEPTED') {
-      await prisma.room.update({
-        where: { id: room.id },
-        data: {
-          status: 'IN_PROGRESS'
-        }
+        where: { id: roomId },
+        data: { status: RoomStatus.COMPLETED }
       })
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Submit room result error:', error)
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    )
+    console.error('Submit Score Error:', error)
+    return new NextResponse('Error', { status: 500 })
   }
 }

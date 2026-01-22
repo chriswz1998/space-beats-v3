@@ -36,6 +36,7 @@ export default function PhaserGame({
   const roomPollingRef = useRef<NodeJS.Timeout | null>(null)
   const roomSubmitKeyRef = useRef<string | null>(null)
   const lastStatsRef = useRef<GameStats | null>(null)
+  const roomResultViewedRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!gameRef.current || !songData || typeof window === 'undefined') {
@@ -145,7 +146,10 @@ export default function PhaserGame({
             // Load chart data by difficulty (default normal)
             const normalizedDifficulty = (difficulty || 'normal').toLowerCase()
             let chartData: any[] = []
-            if (normalizedDifficulty === 'easy' && Array.isArray(songData.easyChart)) {
+            if (
+              normalizedDifficulty === 'easy' &&
+              Array.isArray(songData.easyChart)
+            ) {
               chartData = songData.easyChart
             } else if (
               normalizedDifficulty === 'hard' &&
@@ -393,39 +397,33 @@ export default function PhaserGame({
     }
 
     submitRoomResult()
-
   }, [roomId, gameState, gameStats])
 
   useEffect(() => {
-    if (!roomId) return
+    if (!roomId || !roomResult?.isCompleted) return
+    if (roomResultViewedRef.current === roomId) return
+    roomResultViewedRef.current = roomId
 
-    if (roomPollingRef.current) {
-      clearInterval(roomPollingRef.current)
-    }
-
-    roomPollingRef.current = setInterval(async () => {
+    if (typeof window !== 'undefined') {
       try {
-        const res = await fetch(`/api/room/status?roomId=${roomId}`)
-        const data = await res.json()
-        if (data?.success && data?.isCompleted) {
-          setRoomResult(data)
-          if (roomPollingRef.current) {
-            clearInterval(roomPollingRef.current)
-            roomPollingRef.current = null
-          }
-        }
+        const key = 'spacebeats:roomResultsHidden'
+        const stored = window.localStorage.getItem(key)
+        const parsed = stored ? (JSON.parse(stored) as string[]) : []
+        const next = Array.from(new Set([...(parsed || []), roomId]))
+        window.localStorage.setItem(key, JSON.stringify(next))
       } catch (error) {
-        console.error('Failed to poll room status:', error)
-      }
-    }, 2000)
-
-    return () => {
-      if (roomPollingRef.current) {
-        clearInterval(roomPollingRef.current)
-        roomPollingRef.current = null
+        console.error('Failed to persist room result hide state:', error)
       }
     }
-  }, [roomId])
+
+    fetch('/api/room/notifications/viewed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roomId })
+    }).catch((error) => {
+      console.error('Mark room result viewed error:', error)
+    })
+  }, [roomId, roomResult?.isCompleted])
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-black">

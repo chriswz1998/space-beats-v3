@@ -165,13 +165,24 @@
   
   .pop-bounce {
     animation: pop-bounce 2s ease-in-out infinite;
+    will-change: transform;
   }
   
   .pop-rotate {
     animation: pop-rotate 20s linear infinite;
+    will-change: transform;
   }
   
   .pop-pulse {
     animation: pop-pulse 3s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pop-bounce,
+    .pop-rotate,
+    .pop-pulse {
+      animation: none;
+    }
   }
 }

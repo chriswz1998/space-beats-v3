@@ -53,7 +53,27 @@ export async function GET() {
     })
 
     // Only return completed rooms that the user has not viewed yet.
-    const completedRooms = await prisma.room.findMany({
+    const completedRooms = await getCompletedRooms(userId)
+
+    return NextResponse.json({
+      success: true,
+      pendingInvites,
+      acceptedRooms,
+      pendingSent,
+      completedRooms
+    })
+  } catch (error) {
+    console.error('Fetch room notifications error:', error)
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
+  }
+}
+
+async function getCompletedRooms(userId: string) {
+  try {
+    return await prisma.room.findMany({
       where: {
         status: 'COMPLETED',
         OR: [{ inviterId: userId }, { inviteeId: userId }],
@@ -71,19 +91,28 @@ export async function GET() {
         invitee: true
       }
     })
-
-    return NextResponse.json({
-      success: true,
-      pendingInvites,
-      acceptedRooms,
-      pendingSent,
-      completedRooms
-    })
   } catch (error) {
-    console.error('Fetch room notifications error:', error)
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    )
+    const errorCode =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code: unknown }).code)
+        : null
+
+    if (errorCode !== 'P2022') {
+      throw error
+    }
+
+    // Fallback for databases missing resultViewedAt column.
+    return prisma.room.findMany({
+      where: {
+        status: 'COMPLETED',
+        OR: [{ inviterId: userId }, { inviteeId: userId }]
+      },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        song: true,
+        inviter: true,
+        invitee: true
+      }
+    })
   }
 }

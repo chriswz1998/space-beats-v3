@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 
 const allowedOrigins = [
   'http://localhost:3000',
+  'https://game.cabyte.ca',
   'https://rapid-terrier-active.ngrok-free.app'
 ]
 
